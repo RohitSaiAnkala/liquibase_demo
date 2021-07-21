@@ -1,0 +1,1552 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext" xmlns:pro="http://www.liquibase.org/xml/ns/pro"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd http://www.liquibase.org/xml/ns/pro http://www.liquibase.org/xml/ns/pro/liquibase-pro-4.1.xsd http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.1.xsd">
+
+<!--<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"-->
+<!--                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"-->
+<!--                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog-->
+<!--                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd">-->
+<changeSet author="manchikr" id="1626120937970-0">
+        <sql dbms="postgresql">CREATE TYPE ENM_ACCT_TYPE AS ENUM ('ASSET', 'LIABILITY', 'EQUITY', 'SALE', 'COST', 'EXPENSE', 'INCOME', 'CONTRAEXPENSE', 'MEMO', 'NONADD');</sql>
+        <sql dbms="postgresql">CREATE TYPE ENM_ACCT_SUB_TYPE AS ENUM ('RETAINED_EARNINGS', 'PROFIT', 'CASH', 'VEHICLE_INVENTORY', 'VEHICLE_SALE', 'OPEN_AR', 'BF_RECEIVABLES', 'OPEN_ITEM_AP', 'INTER_COMPANY');</sql>
+        <sql dbms="postgresql">CREATE TYPE ENM_CTRL_TYPE AS ENUM ('VENDOR', 'CUSTOMER', 'EMPLOYEE', 'VEHICLE', 'REFERENCE', 'REQUIRED_NOT_VALIDATED');</sql>
+        <sql dbms="postgresql">CREATE TYPE ENM_RPT_TYPE AS ENUM ('INCOME','USER','UA');</sql>
+        <sql dbms="postgresql">CREATE TYPE ENM_PO_TYPE AS ENUM ( 'PARTS', 'MIS', 'SERVICE', 'SALES');</sql>
+        <sql dbms="postgresql">CREATE TYPE ENM_PO_STATUS AS ENUM ('INC','APP','INV','VOID');</sql>
+        <sql dbms="postgresql">CREATE TYPE ENM_JRNL_DOC_TYPE AS ENUM ('CR', 'CHK', 'JV', 'PRT-INV', 'PAY-INV', 'RE', 'RO-INV', 'VEH-PRCH-INV', 'VEH-SALE-INV', 'PAYROLL', 'FIN-CHARGE', 'FMLR-INV', 'PART-CRDT-MEMO', 'MFC-DOC', 'FMLR-CREDT-MEMO', 'DLR-TRADE');</sql>
+        <sql dbms="postgresql">CREATE TYPE ENM_JRNL_TYPE AS ENUM ('A', 'F', 'G', 'B', 'I', 'R', 'P', 'S', 'D', 'H', 'C', 'Y');</sql>
+        <sql dbms="postgresql">CREATE TYPE ENM_POST_ACTION AS ENUM ('READ','ADD','DELETE','UPDATE','VALIDATE');</sql>
+        <sql dbms="postgresql">CREATE TYPE ENM_CHECK_TYPE AS ENUM ('ACCOUNTING','FLOOR','OPEN');</sql>
+        <sql dbms="postgresql">CREATE TYPE ENM_CHECK_NAME_TYPE AS ENUM ('VENDOR','CUSTOMER');</sql>
+        <sql dbms="postgresql">CREATE TYPE ENM_INTERFACE_CODE AS ENUM ('CAP', 'CRE', 'FI', 'GL', 'OAP', 'ODC', 'PA', 'PC', 'PT', 'SV', 'LM', 'LR', 'CP', 'REV', 'OAP.REV', 'MAP', 'CO', 'ADJ', 'CCR');</sql>
+        <sql dbms="postgresql">CREATE TYPE typ_pos_validate_fields AS (is_user_id  BOOLEAN, is_validate_fld  BOOLEAN, is_item_id  BOOLEAN, is_tmplt_desc  BOOLEAN, is_trgt_co  BOOLEAN, is_acct_number  BOOLEAN, is_default_amt  BOOLEAN, is_control_1  BOOLEAN, is_productivity  BOOLEAN, is_control_2  BOOLEAN, is_stat_cnt  BOOLEAN, is_post_desc BOOLEAN);</sql>
+        <sql dbms="postgresql">CREATE TYPE typ_post_fml_flags AS (is_post_fml_pct  BOOLEAN, is_post_fml_co  BOOLEAN, is_post_fml_acct  BOOLEAN, is_post_fml_bal_flag BOOLEAN);</sql>
+        <sql dbms="postgresql">CREATE TYPE typ_recr_validate_fields AS (is_user_id  BOOLEAN, is__validate_fld  BOOLEAN, is__recur_tmplt_id  BOOLEAN, is__begin_date  BOOLEAN, is__end_date  BOOLEAN, is__rev_annv_day  BOOLEAN, is__je_desc  BOOLEAN, is__trgt_co  BOOLEAN, is__acct_number  BOOLEAN, is__post_fml_flag  BOOLEAN, is__default_amt  BOOLEAN, is__post_fml_pct  BOOLEAN, is__post_fml_co  BOOLEAN, is__post_fml_acct  BOOLEAN, is__post_fml_bal_flag  BOOLEAN, is__control1  BOOLEAN, is__productivity  BOOLEAN, is__control2  BOOLEAN, is__stat_cnt  BOOLEAN, is__post_desc  BOOLEAN, is__last_post_upd  BOOLEAN, is__last_user_id BOOLEAN);</sql>
+        <sql dbms="postgresql">CREATE TYPE typ_control AS (control_id UUID, control_notes TEXT,control_type ENM_CTRL_TYPE);</sql>
+        <sql dbms="postgresql">CREATE TYPE typ_post_distr_details AS (chart_accounts_fk UUID  ,allocation_percents DECIMAL(6,4));</sql>
+        <sql dbms="postgresql">CREATE TYPE ENM_STAT_TYPE AS ENUM ('REQUIRED','SYSTEM','USER');</sql>
+        <sql dbms="postgresql">CREATE TYPE typ_po_ship_info AS ( ship_via_id TEXT, tracking_nbr TEXT, est_delivery_date DATE, est_freight_amt MONEY, ship_address UUID);</sql>
+        <sql dbms="postgresql">CREATE TYPE ENM_SCH_RPT_TYPE AS ENUM ('LEDGER', 'BANK' );</sql>
+    </changeSet>
+    <changeSet  author="manchikr"  id="1626120937970-2">
+        <createProcedure
+                dbms="postgresql"
+                encoding="UTF-8"
+                procedureName="fn_create_tenant"
+                relativeToChangelogFile="true">
+            CREATE OR REPLACE FUNCTION fn_create_tenant()
+            RETURNS TRIGGER
+            LANGUAGE plpgsql
+            AS $fn$
+            DECLARE
+            pschemaname VARCHAR default TG_TABLE_SCHEMA;
+            ptenantid VARCHAR default new.tenant_id;
+            lRec record;
+            strPartTblName VARCHAR DEFAULT ' ';
+            strTempTblName VARCHAR DEFAULT ' ';
+            strPrevSchema VARCHAR DEFAULT ' ';
+            BEGIN
+            -- RAISE INFO 'passed values are %I %I',pschemaname,ptenantid;
+            -- preserve the current schema before changing it
+            SELECT current_schemas(false) into strPrevSchema;
+            -- set the current search to tmp_{given schema} this will be scrach pad for the latest prod schema tables
+            EXECUTE 'SET search_path TO '|| pschemaname;
+            -- clean any old prod tables info if exist
+            FOR lRec IN EXECUTE FORMAT('select par.relname from  (select partrelid from pg_partitioned_table) pt join  pg_class par on   par.oid = pt.partrelid where par.relnamespace::regnamespace::text = %s', quote_literal( pschemaname))
+            LOOP
+            strPartTblName = CONCAT(lRec.relname,'_',REPLACE(pTenantID,'-','_')) ;
+            EXECUTE FORMAT('SELECT table_name FROM information_schema.tables WHERE table_schema = %s AND table_name = %s', quote_literal(pschemaname),  quote_literal(strPartTblName)) INTO strTempTblName;
+            IF (strTempTblName IS NULL OR strTempTblName = '') THEN
+            EXECUTE FORMAT('CREATE TABLE %s PARTITION OF %s FOR VALUES IN  (%s)', strPartTblName, lRec.relname, quote_literal(pTenantID));
+            END IF;
+            END LOOP;
+            EXECUTE 'SET search_path TO '|| REPLACE(REPLACE(strPrevSchema,'{',''),'}','');
+            RETURN NULL;
+            EXCEPTION
+            WHEN OTHERS THEN
+            GET STACKED DIAGNOSTICS strPartTblName = PG_EXCEPTION_CONTEXT;
+            RAISE EXCEPTION USING
+            MESSAGE = FORMAT('unexpected error  %I ERROR: %s', SQLERRM, strPartTblName),
+            HINT = 'Fix the error',
+            ERRCODE = SQLSTATE;
+            RETURN NULL;
+            END;
+            $fn$;
+        </createProcedure>
+    </changeSet>
+    <changeSet  author="manchikr"  id="1626120937970-4">
+        <createProcedure
+                dbms="postgresql"
+                encoding="UTF-8"
+                procedureName="fn_get_account_type"
+                relativeToChangelogFile="true">
+            CREATE OR REPLACE FUNCTION fn_get_account_type(pAccountID UUID) RETURNS ENM_ACCT_TYPE AS
+            $getActType$
+            DECLARE
+            actType ENM_ACCT_TYPE;
+            BEGIN
+            SELECT account_type INTO actType FROM tbl_chart_accounts WHERE  chart_accounts_id = pAccountID;
+            RETURN actType;
+            END;
+            $getActType$ LANGUAGE plpgsql;
+        </createProcedure>
+    </changeSet>
+    <changeSet  author="manchikr"  id="1626120937970-6">
+        <createProcedure
+                dbms="postgresql"
+                encoding="UTF-8"
+                procedureName="tr_fn_chk_act_type"
+                relativeToChangelogFile="true">
+            CREATE FUNCTION tr_fn_chk_act_type() RETURNS TRIGGER AS
+            $checkActType$
+            BEGIN
+            IF 'SALE'::ENM_ACCT_TYPE != fn_get_account_type(NEW.over_allowance_chart_accounts_fk) THEN
+            RAISE EXCEPTION 'over_allowance_chart_accounts % Is not type of SALE', NEW.over_allowance_chart_accounts_fk;
+            END IF;
+            IF 'COST'::ENM_ACCT_TYPE != fn_get_account_type(NEW.cost_account_chart_accounts_fk) THEN
+            RAISE EXCEPTION 'cost_account_chart_accounts % Is not type of COST', NEW.cost_account_chart_accounts_fk;
+            END IF;
+            IF 'COST'::ENM_ACCT_TYPE != fn_get_account_type(NEW.recon_account_chart_accounts_fk) THEN
+            RAISE EXCEPTION 'recon_account_chart_accounts % Is not type of COST', NEW.recon_account_chart_accounts_fk;
+            END IF;
+            IF fn_get_account_type(NEW.cost_offset_account_chart_accounts_fk) IN ('ASSET'::ENM_ACCT_TYPE,'LIABILITY'::ENM_ACCT_TYPE)  THEN
+            RAISE EXCEPTION 'cost_offset_account_chart_accounts % Is not type of COST', NEW.cost_offset_account_chart_accounts_fk;
+            END IF;
+            RETURN NEW;
+            END
+            $checkActType$ LANGUAGE 'plpgsql';
+        </createProcedure>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-8">
+        <createTable tableName="tbl_departments">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tenant_fk" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_departments_tnt_departments_pkey"/>
+            </column>
+            <column name="department_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_departments_tnt_departments_pkey"/>
+            </column>
+            <column name="dept_id" type="TEXT"/>
+            <column name="dept_name" type="TEXT"/>
+            <column name="dept_emp_contact" type="UUID"/>
+            <column name="created_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <modifySql dbms="postgresql">
+            <append value=" PARTITION BY LIST (tenant_fk)"/>
+        </modifySql>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-10">
+        <createTable tableName="tbl_tenant">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="store_info_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_tbl_tenant_pkey"/>
+            </column>
+            <column name="enterprise_id" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="store_id" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tenant_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_active" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-12">
+        <sql dbms="postgresql" splitStatements="false" endDelimiter="END_TBL_TALENT_TRG_INS_AFT">
+            CREATE CONSTRAINT TRIGGER trg_tbl_tenant_insert_after
+            AFTER INSERT ON tbl_tenant
+            FOR EACH ROW
+            EXECUTE PROCEDURE fn_create_tenant();
+            END_TBL_TALENT_TRG_INS_AFT
+        </sql>
+        <rollback>
+            DROP TRIGGER IF EXISTS trg_tbl_tenant_insert_after ON tbl_tenant;
+        </rollback>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-14">
+        <createTable tableName="tbl_acct_error_log">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tenant_fk" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_acct_error_log_pkey"/>
+            </column>
+            <column name="acct_error_log_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_acct_error_log_pkey"/>
+            </column>
+            <column name="template_fk" type="UUID"/>
+            <column name="tbl_names" type="TEXT[]"/>
+            <column name="payload" type="TEXT"/>
+            <column name="return_code" type="INTEGER"/>
+            <column name="error_text" type="TEXT"/>
+            <column name="created_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <modifySql dbms="postgresql">
+            <append value=" PARTITION BY LIST (tenant_fk)"/>
+        </modifySql>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-16">
+        <createTable tableName="tbl_franchises_manf">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tenant_fk" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_franchises_manf_pkey"/>
+            </column>
+            <column name="frachises_manf_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_franchises_manf_pkey"/>
+            </column>
+            <column name="chart_accounts_fk" type="UUID[]"/>
+            <column name="created_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <modifySql dbms="postgresql">
+            <append value=" PARTITION BY LIST (tenant_fk)"/>
+        </modifySql>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-18">
+        <createTable tableName="tbl_sale_chain">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tenant_fk" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_sale_chain_pkey"/>
+            </column>
+            <column name="sale_chain_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_sale_chain_pkey"/>
+            </column>
+            <column name="chart_accounts_fk" type="UUID"/>
+            <column name="over_allowance_chart_accounts_fk" type="UUID"/>
+            <column name="cost_account_chart_accounts_fk" type="UUID"/>
+            <column name="cost_percent_of_sale" type="numeric(5, 4)"/>
+            <column name="recon_account_chart_accounts_fk" type="UUID"/>
+            <column name="cost_offset_account_chart_accounts_fk" type="UUID"/>
+            <column name="created_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <modifySql dbms="postgresql">
+            <append value=" PARTITION BY LIST (tenant_fk)"/>
+        </modifySql>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-20">
+        <sql dbms="postgresql" splitStatements="false" endDelimiter="TRG_TBL_SALE_CHAIN_BFR_INS">
+            CREATE TRIGGER trg_tbl_sale_chain_before_insert
+            BEFORE INSERT  ON tbl_sale_chain
+            FOR EACH ROW
+            EXECUTE PROCEDURE  tr_fn_chk_act_type();
+            TRG_TBL_SALE_CHAIN_BFR_INS
+        </sql>
+        <rollback>
+            DROP TRIGGER IF EXISTS trg_tbl_sale_chain_before_insert ON tbl_sale_chain;
+        </rollback>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-22">
+        <createTable tableName="tbl_act_payable_invoices">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tenant_fk" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_act_payable_invoices_610e03b4_1cda_4600_a7c6_96cea8f27_pkey"/>
+            </column>
+            <column name="act_payable_invoices_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_act_payable_invoices_610e03b4_1cda_4600_a7c6_96cea8f27_pkey"/>
+            </column>
+            <column name="vendor_fk" type="UUID"/>
+            <column name="invoice_id" type="TEXT"/>
+            <column name="invoice_date" type="date"/>
+            <column name="invoice_comments" type="TEXT"/>
+            <column name="invoice_amount" type="DECIMAL"/>
+            <column name="discount_amount" type="DECIMAL"/>
+            <column name="entry_date" type="date"/>
+            <column name="due_date" type="date"/>
+            <column name="is_inv_on_hold" type="BOOLEAN"/>
+            <column name="posting_heading_fk" type="UUID[]"/>
+            <column name="po_fk" type="UUID"/>
+            <column name="scanned_doc_gcm_fk" type="TEXT"/>
+            <column name="yooz_approver" type="TEXT"/>
+            <column name="yooz_doc_id" type="TEXT"/>
+            <column name="create_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_dt" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <modifySql dbms="postgresql">
+            <append value=" PARTITION BY LIST (tenant_fk)"/>
+        </modifySql>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-24">
+        <createTable tableName="tbl_gl_calendar">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="gl_calendar_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_gl_calendar_pkey"/>
+            </column>
+            <column name="tenant_fk" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_gl_calendar_pkey"/>
+            </column>
+            <column name="gl_first_dom" type="INTEGER"/>
+            <column name="gl_cut_off" type="TIMESTAMP WITHOUT TIME ZONE"/>
+            <column name="is_gl_month_open" type="BOOLEAN"/>
+            <column name="gl_mth_close" type="TIMESTAMP WITHOUT TIME ZONE"/>
+            <column name="is_active" type="BOOLEAN"/>
+            <column name="create_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_dt" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <modifySql dbms="postgresql">
+            <append value=" PARTITION BY LIST (tenant_fk)"/>
+        </modifySql>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-26">
+        <createTable tableName="tbl_gl_fyr_end_cal">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="gl_fyr_end_cal_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_gl_fyr_end_cal_pkey"/>
+            </column>
+            <column name="tenant_fk" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_gl_fyr_end_cal_pkey"/>
+            </column>
+            <column name="fy_end_date" type="date"/>
+            <column name="is_month13_report" type="BOOLEAN"/>
+            <column name="month13_open_date" type="date"/>
+            <column name="month13_close_date" type="date"/>
+            <column name="month13_proc_code" type="TEXT"/>
+            <column name="is_active" type="BOOLEAN"/>
+            <column name="create_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_dt" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <modifySql dbms="postgresql">
+            <append value=" PARTITION BY LIST (tenant_fk)"/>
+        </modifySql>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-28">
+        <createTable tableName="tbl_chart_accounts">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tenant_fk" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_chart_accounts_pkey"/>
+            </column>
+            <column name="chart_accounts_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_chart_accounts_pkey"/>
+            </column>
+            <column name="expense_chain_fk" type="UUID"/>
+            <column name="account_description" type="TEXT"/>
+            <column name="account_number" type="TEXT"/>
+            <column name="account_type" type="ENM_ACCT_TYPE"/>
+            <column name="account_sub_type" type="ENM_ACCT_SUB_TYPE"/>
+            <column name="account_begin_date" type="date"/>
+            <column name="account_end_date" type="date"/>
+            <column name="control" type="TYP_CONTROL[]"/>
+            <column name="is_posting_desc_required" type="BOOLEAN"/>
+            <column name="stat_count_type" type="ENM_STAT_TYPE"/>
+            <column name="is_restricted_access" type="BOOLEAN"/>
+            <column name="sale_chain_fk" type="UUID"/>
+            <column name="department_fk" type="UUID"/>
+            <column name="franchise_fk" type="UUID"/>
+            <column name="created_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <modifySql dbms="postgresql">
+            <append value=" PARTITION BY LIST (tenant_fk)"/>
+        </modifySql>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-30">
+        <createTable tableName="tbl_account_recivables">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tenant_fk" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_account_recivables_610e03b4_1cda_4600_a7c6_96cea8f27cd_pkey"/>
+            </column>
+            <column name="account_recivables_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_account_recivables_610e03b4_1cda_4600_a7c6_96cea8f27cd_pkey"/>
+            </column>
+            <column name="invoice_date" type="date"/>
+            <column name="posting_body_fk" type="UUID"/>
+            <column name="doc_type" type="ENM_JRNL_DOC_TYPE"/>
+            <column name="customer_fk" type="UUID"/>
+            <column name="is_on_hold" type="BOOLEAN"/>
+            <column name="hold_comment" type="TEXT"/>
+            <column name="journal_fk" type="UUID"/>
+            <column name="ar_schedule_fk" type="UUID"/>
+            <column name="create_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_dt" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <modifySql dbms="postgresql">
+            <append value=" PARTITION BY LIST (tenant_fk)"/>
+        </modifySql>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-32">
+        <createTable tableName="tbl_gl_journal">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tenant_fk" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_gl_journal_pkey"/>
+            </column>
+            <column name="gl_journal_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_gl_journal_pkey"/>
+            </column>
+            <column name="journalname" type="TEXT"/>
+            <column name="journaltype" type="ENM_JRNL_TYPE"/>
+            <column name="jrnl_begin_date" type="date"/>
+            <column name="jrnl_end_date" type="date"/>
+            <column name="def_doc_type" type="ENM_JRNL_DOC_TYPE"/>
+            <column name="is_desc_req" type="BOOLEAN"/>
+            <column name="is_inter_co" type="BOOLEAN"/>
+            <column name="post_tmplt_fk" type="UUID"/>
+            <column name="recur_templt_fk" type="UUID"/>
+            <column name="create_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_dt" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <modifySql dbms="postgresql">
+            <append value=" PARTITION BY LIST (tenant_fk)"/>
+        </modifySql>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-34">
+        <createTable tableName="tbl_posting_heading">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tenant_fk" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_posting_heading_pkey"/>
+            </column>
+            <column name="posting_heading_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_posting_heading_pkey"/>
+            </column>
+            <column name="gl_journal_fk" type="UUID"/>
+            <column name="reference_doc_ref_id" type="TEXT"/>
+            <column name="document_date" type="date"/>
+            <column name="document_description" type="TEXT"/>
+            <column name="document_type" type="ENM_JRNL_DOC_TYPE"/>
+            <column name="entry_date" type="date"/>
+            <column name="post_date" type="TIMESTAMP WITHOUT TIME ZONE"/>
+            <column name="is_transaction_ready" type="BOOLEAN"/>
+            <column name="interface_code" type="ENM_INTERFACE_CODE"/>
+            <column name="is_doc_voided" type="BOOLEAN"/>
+            <column name="logon_id" type="TEXT"/>
+            <column name="parts_invoice_fk" type="UUID"/>
+            <column name="is_active" type="BOOLEAN"/>
+            <column name="create_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_dt" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <modifySql dbms="postgresql">
+            <append value=" PARTITION BY LIST (tenant_fk)"/>
+        </modifySql>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-36">
+        <createTable tableName="tbl_act_checks">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tenant_fk" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_act_checks_pkey"/>
+            </column>
+            <column name="act_checks_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_act_checks_pkey"/>
+            </column>
+            <column name="check_number" type="BIGINT"/>
+            <column name="payee_id" type="UUID"/>
+            <column name="payee_name" type="TEXT"/>
+            <column name="check_date" type="date"/>
+            <column name="check_amount" type="DECIMAL"/>
+            <column name="check_type" type="ENM_CHECK_TYPE"/>
+            <column name="void_date" type="date"/>
+            <column name="act_payable_invoices_fk" type="UUID[]"/>
+            <column name="discount_amount" type="DECIMAL"/>
+            <column name="comment" type="TEXT"/>
+            <column name="vehicle_fk" type="UUID[]"/>
+            <column name="posting_heading_fk" type="UUID[]"/>
+            <column name="name_type" type="ENM_CHECK_NAME_TYPE"/>
+            <column name="payee_address" type="UUID"/>
+            <column name="create_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_dt" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-38">
+        <createTable tableName="tbl_posting_body">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tenant_fk" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_posting_body_pkey"/>
+            </column>
+            <column name="posting_body_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_posting_body_pkey"/>
+            </column>
+            <column name="posting_heading_fk" type="UUID"/>
+            <column name="chart_accounts_fk" type="UUID"/>
+            <column name="default_amt" type="DECIMAL"/>
+            <column name="control" type="TYP_CONTROL[]"/>
+            <column name="stat_counts" type="INTEGER"/>
+            <column name="post_desc" type="TEXT"/>
+            <column name="is_month13_report" type="BOOLEAN"/>
+            <column name="expense_chain_fk" type="UUID"/>
+            <column name="ro_fk" type="UUID"/>
+            <column name="create_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_dt" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <modifySql dbms="postgresql">
+            <append value=" PARTITION BY LIST (tenant_fk)"/>
+        </modifySql>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-40">
+        <createTable tableName="tbl_expense_chain">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tenant_fk" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_expense_chain_pkey"/>
+            </column>
+            <column name="expense_chain_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_expense_chain_pkey"/>
+            </column>
+            <column name="distribution_accounts" type="TYP_POST_DISTR_DETAILS"/>
+            <column name="created_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <modifySql dbms="postgresql">
+            <append value=" PARTITION BY LIST (tenant_fk)"/>
+        </modifySql>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-42">
+        <createTable tableName="tbl_gl_posting_tmplt">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tenant_fk" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_gl_posting_tmplt_pkey"/>
+            </column>
+            <column name="gl_posting_tmplt_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_gl_posting_tmplt_pkey"/>
+            </column>
+            <column name="posting_tmplt_name" type="TEXT"/>
+            <column name="action" type="ENM_POST_ACTION"/>
+            <column name="tmplt_desc" type="TEXT"/>
+            <column name="document_description" type="TEXT"/>
+            <column name="is_active" type="BOOLEAN"/>
+            <column name="validate_fields" type="TYP_POS_VALIDATE_FIELDS"/>
+            <column name="create_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_dt" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <modifySql dbms="postgresql">
+            <append value=" PARTITION BY LIST (tenant_fk)"/>
+        </modifySql>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-44">
+        <createTable tableName="tbl_gl_recur_posting_tmplt">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tenant_fk" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_gl_recur_posting_tmplt_610e03b4_1cda_4600_a7c6_96cea8f_pkey"/>
+            </column>
+            <column name="gl_recur_posting_tmplt_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_gl_recur_posting_tmplt_610e03b4_1cda_4600_a7c6_96cea8f_pkey"/>
+            </column>
+            <column name="recur_posting_tmplt_name" type="TEXT"/>
+            <column name="document_description" type="TEXT"/>
+            <column name="templt_desc" type="TEXT"/>
+            <column name="action" type="ENM_POST_ACTION"/>
+            <column name="gl_journal_fk" type="UUID"/>
+            <column name="begin_date" type="date"/>
+            <column name="end_date" type="date"/>
+            <column name="rev_annv_day" type="INTEGER"/>
+            <column name="validate_fields" type="TYP_RECR_VALIDATE_FIELDS"/>
+            <column name="is_post_updt" type="BOOLEAN"/>
+            <column name="create_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_dt" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <modifySql dbms="postgresql">
+            <append value=" PARTITION BY LIST (tenant_fk)"/>
+        </modifySql>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-46">
+        <createTable tableName="tbl_po_line">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tenant_fk" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_po_line_pkey"/>
+            </column>
+            <column name="po_line_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_po_line_pkey"/>
+            </column>
+            <column name="po_fk" type="UUID"/>
+            <column name="po_line_comments" type="TEXT"/>
+            <column name="detail_desc" type="TEXT"/>
+            <column name="dtl_qty" type="INTEGER"/>
+            <column name="received_qty" type="INTEGER"/>
+            <column name="part_invoice_nbr" type="TEXT"/>
+            <column name="part_order_nbr" type="TEXT"/>
+            <column name="unit_price" type="DECIMAL"/>
+            <column name="extended_price_amt" type="DECIMAL"/>
+            <column name="stock_number" type="TEXT"/>
+            <column name="vin_number" type="TEXT"/>
+            <column name="repair_order_line_nbr" type="UUID[]"/>
+            <column name="is_taxable" type="BOOLEAN"/>
+            <column name="authorized_by_nm" type="UUID[]"/>
+            <column name="received_dt" type="date"/>
+            <column name="received_by_po_user_id" type="UUID"/>
+            <column name="is_attached" type="BOOL[]"/>
+            <column name="is_completed" type="BOOLEAN"/>
+            <column name="ship_info" type="TYP_PO_SHIP_INFO[]"/>
+            <column name="create_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_dt" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <modifySql dbms="postgresql">
+            <append value=" PARTITION BY LIST (tenant_fk)"/>
+        </modifySql>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-48">
+        <createTable tableName="tbl_purchase_order">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tenant_fk" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_purchase_order_pkey"/>
+            </column>
+            <column name="purchase_order_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_purchase_order_pkey"/>
+            </column>
+            <column name="po_order_id" type="TEXT"/>
+            <column name="po_order_type" type="ENM_PO_TYPE"/>
+            <column name="order_status" type="ENM_PO_STATUS"/>
+            <column name="order_total_amt" type="DECIMAL"/>
+            <column name="order_comment" type="TEXT"/>
+            <column name="total_freight_amt" type="DECIMAL"/>
+            <column name="tax_total_amt" type="DECIMAL"/>
+            <column name="customer_fk" type="UUID"/>
+            <column name="ship_address_fk" type="UUID"/>
+            <column name="vendor_fk" type="UUID"/>
+            <column name="requestor_nm" type="TEXT"/>
+            <column name="ship_via_fk" type="UUID"/>
+            <column name="tracking_nbr" type="TEXT"/>
+            <column defaultValueComputed="CURRENT_TIMESTAMP" name="close_dt" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="manual_po_order_nbr" type="TEXT"/>
+            <column name="is_manual_close" type="BOOLEAN"/>
+            <column name="is_inactive" type="BOOLEAN"/>
+            <column name="is_summary" type="BOOLEAN"/>
+            <column name="void_dt" type="TIMESTAMP WITHOUT TIME ZONE"/>
+            <column name="is_sep_pl" type="BOOLEAN"/>
+            <column name="create_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_dt" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <modifySql dbms="postgresql">
+            <append value=" PARTITION BY LIST (tenant_fk)"/>
+        </modifySql>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-50">
+        <createTable tableName="tbl_reports_group">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tenant_fk" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_reports_group_pkey"/>
+            </column>
+            <column name="reports_group_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_reports_group_pkey"/>
+            </column>
+            <column name="report_type" type="ENM_RPT_TYPE"/>
+            <column name="report_sub_group" type="TEXT"/>
+            <column name="report_desc" type="TEXT"/>
+            <column name="chart_accounts_fk" type="UUID[]"/>
+            <column name="created_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <modifySql dbms="postgresql">
+            <append value=" PARTITION BY LIST (tenant_fk)"/>
+        </modifySql>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-52">
+        <createTable tableName="tbl_rpt_schedule">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tenant_fk" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_rpt_schedule_pkey"/>
+            </column>
+            <column name="rpt_schedule_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_rpt_schedule_pkey"/>
+            </column>
+            <column autoIncrement="true" name="rpt_no" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="rpt_name" type="TEXT"/>
+            <column name="rpt_type" type="ENM_SCH_RPT_TYPE"/>
+            <column name="rpt_source_data_set" type="TEXT"/>
+            <column name="rpt_columns_clause" type="TEXT"/>
+            <column name="rpt_where_clause" type="TEXT"/>
+            <column name="sort_order_clause" type="TEXT"/>
+            <column name="is_page_brk_on_each_jrnl" type="BOOLEAN"/>
+            <column name="is_required_to_close" type="BOOLEAN"/>
+            <column name="column_heading_exceptions" type="TEXT"/>
+            <column name="column_width_exceptions" type="TEXT"/>
+            <column name="column_justification_exceptions" type="TEXT"/>
+            <column name="create_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_dt" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <modifySql dbms="postgresql">
+            <append value=" PARTITION BY LIST (tenant_fk)"/>
+        </modifySql>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-54">
+        <createTable tableName="tbl_gl_rcr_post_line_tmplt">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tenant_fk" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_gl_rcr_post_line_tmplt_610e03b4_1cda_4600_a7c6_96cea8f_pkey"/>
+            </column>
+            <column name="gl_recur_posting_tmplt_line_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_gl_rcr_post_line_tmplt_610e03b4_1cda_4600_a7c6_96cea8f_pkey"/>
+            </column>
+            <column name="gl_recur_posting_tmplt_fk" type="UUID"/>
+            <column name="chart_account_fk" type="UUID"/>
+            <column name="amount" type="DECIMAL"/>
+            <column name="control_type" type="TYP_CONTROL"/>
+            <column name="stat_cnt" type="INTEGER"/>
+            <column name="post_line_desc" type="TEXT"/>
+            <column name="post_fml_flag" type="TYP_POST_FML_FLAGS"/>
+            <column name="post_fml_pct" type="numeric(6, 4)"/>
+            <column name="post_fml_cd" type="UUID"/>
+            <column name="post_fml_acct" type="UUID"/>
+            <column name="post_fml_bal_flag" type="TYP_POST_FML_FLAGS"/>
+            <column name="create_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_dt" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <modifySql dbms="postgresql">
+            <append value=" PARTITION BY LIST (tenant_fk)"/>
+        </modifySql>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-56">
+        <createTable tableName="tbl_gl_posting_line_tmplt">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tenant_fk" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_gl_posting_line_tmplt_610e03b4_1cda_4600_a7c6_96cea8f2_pkey"/>
+            </column>
+            <column name="gl_posting_tmplt_line_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="tbl_gl_posting_line_tmplt_610e03b4_1cda_4600_a7c6_96cea8f2_pkey"/>
+            </column>
+            <column name="gl_posting_tmplt_fk" type="UUID"/>
+            <column name="chart_account_fk" type="UUID"/>
+            <column name="amount" type="DECIMAL"/>
+            <column name="control_type" type="TYP_CONTROL"/>
+            <column name="stat_cnt" type="INTEGER"/>
+            <column name="post_line_desc" type="TEXT"/>
+            <column name="create_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_dt" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_by" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" defaultValueComputed="CURRENT_TIMESTAMP" type="TIMESTAMP WITHOUT TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <modifySql dbms="postgresql">
+            <append value=" PARTITION BY LIST (tenant_fk)"/>
+        </modifySql>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-58">
+        <addUniqueConstraint columnNames="tenant_id, enterprise_id, store_id" constraintName="unq_tbl_tenant_tenant_enterprise_store" tableName="tbl_tenant"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-60">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,department_fk" baseTableName="tbl_chart_accounts" constraintName="tbl_chart_accounts_tenant_fk_department_fk_fkey"  referencedColumnNames="tenant_fk,department_id" referencedTableName="tbl_departments" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-62">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,franchise_fk" baseTableName="tbl_chart_accounts" constraintName="tbl_chart_accounts_tenant_fk_franchise_fk_fkey"  referencedColumnNames="tenant_fk,frachises_manf_id" referencedTableName="tbl_franchises_manf" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-64">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,sale_chain_fk" baseTableName="tbl_chart_accounts" constraintName="tbl_chart_accounts_tenant_fk_sale_chain_fk_fkey"  referencedColumnNames="tenant_fk,sale_chain_id" referencedTableName="tbl_sale_chain" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-66">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,chart_accounts_fk" baseTableName="tbl_posting_body" constraintName="tbl_posting_body_tenant_fk_chart_accounts_fk_fkey"  referencedColumnNames="tenant_fk,chart_accounts_id" referencedTableName="tbl_chart_accounts" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-68">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,chart_accounts_fk" baseTableName="tbl_sale_chain" constraintName="tbl_sale_chain_tenant_fk_chart_accounts_fk_fkey"  referencedColumnNames="tenant_fk,chart_accounts_id" referencedTableName="tbl_chart_accounts" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-70">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,cost_account_chart_accounts_fk" baseTableName="tbl_sale_chain" constraintName="tbl_sale_chain_tenant_fk_cost_account_chart_accounts_fk_fkey"  referencedColumnNames="tenant_fk,chart_accounts_id" referencedTableName="tbl_chart_accounts" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-72">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,cost_offset_account_chart_accounts_fk" baseTableName="tbl_sale_chain" constraintName="tbl_sale_chain_tenant_fk_cost_offset_account_chart_account_fkey"  referencedColumnNames="tenant_fk,chart_accounts_id" referencedTableName="tbl_chart_accounts" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-74">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,over_allowance_chart_accounts_fk" baseTableName="tbl_sale_chain" constraintName="tbl_sale_chain_tenant_fk_over_allowance_chart_accounts_fk_fkey"  referencedColumnNames="tenant_fk,chart_accounts_id" referencedTableName="tbl_chart_accounts" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-78">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,recon_account_chart_accounts_fk" baseTableName="tbl_sale_chain" constraintName="tbl_sale_chain_tenant_fk_recon_account_chart_accounts_fk_fkey"  referencedColumnNames="tenant_fk,chart_accounts_id" referencedTableName="tbl_chart_accounts" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-80">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,journal_fk" baseTableName="tbl_account_recivables" constraintName="tbl_account_recivables_tenant_fk_journal_fk_fkey"  referencedColumnNames="tenant_fk,gl_journal_id" referencedTableName="tbl_gl_journal" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-81">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,gl_journal_fk" baseTableName="tbl_gl_recur_posting_tmplt" constraintName="tbl_gl_recur_posting_tmplt_tenant_fk_gl_journal_fk_fkey"  referencedColumnNames="tenant_fk,gl_journal_id" referencedTableName="tbl_gl_journal" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-82">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,gl_journal_fk" baseTableName="tbl_posting_heading" constraintName="tbl_posting_heading_tenant_fk_gl_journal_fk_fkey"  referencedColumnNames="tenant_fk,gl_journal_id" referencedTableName="tbl_gl_journal" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-84">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,posting_body_fk" baseTableName="tbl_account_recivables" constraintName="tbl_account_recivables_tenant_fk_posting_body_fk_fkey"  referencedColumnNames="tenant_fk,posting_heading_id" referencedTableName="tbl_posting_heading" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-88">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,posting_heading_fk" baseTableName="tbl_posting_body" constraintName="tbl_posting_body_tenant_fk_posting_heading_fk_fkey"  referencedColumnNames="tenant_fk,posting_heading_id" referencedTableName="tbl_posting_heading" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-90">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,expense_chain_fk" baseTableName="tbl_chart_accounts" constraintName="tbl_chart_accounts_tenant_fk_expense_chain_fk_fkey"  referencedColumnNames="tenant_fk,expense_chain_id" referencedTableName="tbl_expense_chain" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-92">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,expense_chain_fk" baseTableName="tbl_posting_body" constraintName="tbl_posting_body_tenant_fk_expense_chain_fk_fkey"  referencedColumnNames="tenant_fk,expense_chain_id" referencedTableName="tbl_expense_chain" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-94">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,template_fk" baseTableName="tbl_acct_error_log" constraintName="tbl_acct_error_log_template_fk_posting_tmptl_fk_fkey"  referencedColumnNames="tenant_fk,gl_posting_tmplt_id" referencedTableName="tbl_gl_posting_tmplt" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-96">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,post_tmplt_fk" baseTableName="tbl_gl_journal" constraintName="tbl_gl_journal_tenant_fk_post_tmplt_fk_fkey"  referencedColumnNames="tenant_fk,gl_posting_tmplt_id" referencedTableName="tbl_gl_posting_tmplt" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-98">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,recur_templt_fk" baseTableName="tbl_gl_journal" constraintName="tbl_gl_journal_tenant_fk_recurr_post_tmplt_fk_fkey"  referencedColumnNames="tenant_fk,gl_posting_tmplt_id" referencedTableName="tbl_gl_posting_tmplt" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-100">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,template_fk" baseTableName="tbl_acct_error_log" constraintName="tbl_acct_error_log_template_fk_recur_tmptl_fk_fkey"  referencedColumnNames="tenant_fk,gl_recur_posting_tmplt_id" referencedTableName="tbl_gl_recur_posting_tmplt" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-102">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,po_fk" baseTableName="tbl_act_payable_invoices" constraintName="tbl_act_payable_invoices_tenant_fk_po_fk_fkey"  referencedColumnNames="tenant_fk,purchase_order_id" referencedTableName="tbl_purchase_order" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-104">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,po_fk" baseTableName="tbl_po_line" constraintName="tbl_po_line_tenant_fk_po_fk_fkey"  referencedColumnNames="tenant_fk,purchase_order_id" referencedTableName="tbl_purchase_order" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-106">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,ar_schedule_fk" baseTableName="tbl_account_recivables" constraintName="tbl_account_recivables_tenant_fk_ar_schedule_fk_fkey"  referencedColumnNames="tenant_fk,rpt_schedule_id" referencedTableName="tbl_rpt_schedule" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-108">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,chart_account_fk" baseTableName="tbl_gl_posting_line_tmplt" constraintName="tbl_gl_posting_line_tmplt_tnt_fk_gl_account_fk_fkey"  referencedColumnNames="tenant_fk,chart_accounts_id" referencedTableName="tbl_chart_accounts" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-110">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,chart_account_fk" baseTableName="tbl_gl_rcr_post_line_tmplt" constraintName="tbl_gl_rcr_post_line_tmplt_tnt_fk_chart_account_fk_fkey"  referencedColumnNames="tenant_fk,chart_accounts_id" referencedTableName="tbl_chart_accounts" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-112">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,gl_posting_tmplt_fk" baseTableName="tbl_gl_posting_line_tmplt" constraintName="tbl_gl_posting_line_tmplt_tnt_fk_gl_posting_tmplt_fk_fkey"  referencedColumnNames="tenant_fk,gl_posting_tmplt_id" referencedTableName="tbl_gl_posting_tmplt" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626120937970-114">
+        <addForeignKeyConstraint baseColumnNames="tenant_fk,gl_recur_posting_tmplt_fk" baseTableName="tbl_gl_rcr_post_line_tmplt" constraintName="tbl_gl_recur_posting__tmplt_tnt_fk_gl_posting_tmplt_fk_fkey"  referencedColumnNames="tenant_fk,gl_recur_posting_tmplt_id" referencedTableName="tbl_gl_recur_posting_tmplt" validate="true"/>
+    </changeSet>
+    <changeSet author="manchikr" id="1626136952029-116">
+        <createView fullDefinition="false" viewName="vw_acct_error_log">
+            SELECT
+            tbl_acct_error_log.tenant_fk
+            ,tbl_acct_error_log.acct_error_log_id
+            ,tbl_acct_error_log.template_fk
+            ,tbl_acct_error_log.tbl_names
+            ,tbl_acct_error_log.payload
+            ,tbl_acct_error_log.return_code
+            ,tbl_acct_error_log.error_text
+            ,tbl_acct_error_log.created_by
+            ,tbl_acct_error_log.created_at
+            ,tbl_acct_error_log.updated_by
+            ,tbl_acct_error_log.updated_at
+            FROM tbl_acct_error_log;
+        </createView>
+    </changeSet>
+    <changeSet author="manchikr" id="1626136952029-118">
+        <createView fullDefinition="false" viewName="vw_departments">
+            SELECT
+            tbl_departments.tenant_fk
+            ,tbl_departments.department_id
+            ,tbl_departments.dept_id
+            ,tbl_departments.dept_name
+            ,tbl_departments.dept_emp_contact
+            ,tbl_departments.created_by
+            ,tbl_departments.created_at
+            ,tbl_departments.updated_by
+            ,tbl_departments.updated_at
+            FROM tbl_departments;
+        </createView>
+    </changeSet>
+    <changeSet author="manchikr" id="1626136952029-120">
+        <createView fullDefinition="false" viewName="vw_franchises_manf">
+            SELECT
+            tbl_franchises_manf.tenant_fk
+            ,tbl_franchises_manf.frachises_manf_id
+            ,tbl_franchises_manf.chart_accounts_fk
+            ,tbl_franchises_manf.created_by
+            ,tbl_franchises_manf.created_at
+            ,tbl_franchises_manf.updated_by
+            ,tbl_franchises_manf.updated_at
+            FROM tbl_franchises_manf;
+        </createView>
+    </changeSet>
+    <changeSet author="manchikr" id="1626136952029-122">
+        <createView fullDefinition="false" viewName="vw_sale_chain">
+            SELECT
+            tbl_sale_chain.tenant_fk
+            ,tbl_sale_chain.sale_chain_id
+            ,tbl_sale_chain.chart_accounts_fk
+            ,tbl_sale_chain.over_allowance_chart_accounts_fk
+            ,tbl_sale_chain.cost_account_chart_accounts_fk
+            ,tbl_sale_chain.cost_percent_of_sale
+            ,tbl_sale_chain.recon_account_chart_accounts_fk
+            ,tbl_sale_chain.cost_offset_account_chart_accounts_fk
+            ,tbl_sale_chain.created_by
+            ,tbl_sale_chain.created_at
+            ,tbl_sale_chain.updated_by
+            ,tbl_sale_chain.updated_at
+            FROM tbl_sale_chain;
+        </createView>
+    </changeSet>
+    <changeSet author="manchikr" id="1626136952029-124">
+        <createView fullDefinition="false" viewName="vw_tenant">
+            SELECT
+            tbl_tenant.store_info_id
+            ,tbl_tenant.enterprise_id
+            ,tbl_tenant.store_id
+            ,tbl_tenant.tenant_id
+            ,tbl_tenant.is_active
+            ,tbl_tenant.created_by
+            ,tbl_tenant.created_at
+            ,tbl_tenant.updated_by
+            ,tbl_tenant.updated_at
+            FROM tbl_tenant;
+        </createView>
+    </changeSet>
+    <changeSet author="manchikr" id="1626136952029-126">
+        <createView fullDefinition="false" viewName="vw_act_payable_invoices">
+            SELECT
+            tbl_act_payable_invoices.tenant_fk
+            ,tbl_act_payable_invoices.act_payable_invoices_id
+            ,tbl_act_payable_invoices.vendor_fk
+            ,tbl_act_payable_invoices.invoice_id
+            ,tbl_act_payable_invoices.invoice_date
+            ,tbl_act_payable_invoices.invoice_comments
+            ,tbl_act_payable_invoices.invoice_amount
+            ,tbl_act_payable_invoices.discount_amount
+            ,tbl_act_payable_invoices.entry_date
+            ,tbl_act_payable_invoices.due_date
+            ,tbl_act_payable_invoices.is_inv_on_hold
+            ,tbl_act_payable_invoices.posting_heading_fk
+            ,tbl_act_payable_invoices.po_fk
+            ,tbl_act_payable_invoices.scanned_doc_gcm_fk
+            ,tbl_act_payable_invoices.yooz_approver
+            ,tbl_act_payable_invoices.yooz_doc_id
+            ,tbl_act_payable_invoices.create_by
+            ,tbl_act_payable_invoices.created_dt
+            ,tbl_act_payable_invoices.updated_by
+            ,tbl_act_payable_invoices.updated_at
+            FROM tbl_act_payable_invoices;
+        </createView>
+    </changeSet>
+    <changeSet author="manchikr" id="1626136952029-128">
+        <createView fullDefinition="false" viewName="vw_gl_calendar">
+            SELECT
+            tbl_gl_calendar.gl_calendar_id
+            ,tbl_gl_calendar.tenant_fk
+            ,tbl_gl_calendar.gl_first_dom
+            ,tbl_gl_calendar.gl_cut_off
+            ,tbl_gl_calendar.is_gl_month_open
+            ,tbl_gl_calendar.gl_mth_close
+            ,tbl_gl_calendar.is_active
+            ,tbl_gl_calendar.create_by
+            ,tbl_gl_calendar.created_dt
+            ,tbl_gl_calendar.updated_by
+            ,tbl_gl_calendar.updated_at
+            FROM tbl_gl_calendar;
+        </createView>
+    </changeSet>
+    <changeSet author="manchikr" id="1626136952029-130">
+        <createView fullDefinition="false" viewName="vw_gl_fyr_end_cal">
+            SELECT
+            tbl_gl_fyr_end_cal.gl_fyr_end_cal_id
+            ,tbl_gl_fyr_end_cal.tenant_fk
+            ,tbl_gl_fyr_end_cal.fy_end_date
+            ,tbl_gl_fyr_end_cal.is_month13_report
+            ,tbl_gl_fyr_end_cal.month13_open_date
+            ,tbl_gl_fyr_end_cal.month13_close_date
+            ,tbl_gl_fyr_end_cal.month13_proc_code
+            ,tbl_gl_fyr_end_cal.is_active
+            ,tbl_gl_fyr_end_cal.create_by
+            ,tbl_gl_fyr_end_cal.created_dt
+            ,tbl_gl_fyr_end_cal.updated_by
+            ,tbl_gl_fyr_end_cal.updated_at
+            FROM tbl_gl_fyr_end_cal;
+        </createView>
+    </changeSet>
+    <changeSet author="manchikr" id="1626136952029-132">
+        <createView fullDefinition="false" viewName="vw_chart_accounts">
+            SELECT
+            tbl_chart_accounts.tenant_fk
+            ,tbl_chart_accounts.chart_accounts_id
+            ,tbl_chart_accounts.expense_chain_fk
+            ,tbl_chart_accounts.account_description
+            ,tbl_chart_accounts.account_number
+            ,tbl_chart_accounts.account_type
+            ,tbl_chart_accounts.account_sub_type
+            ,tbl_chart_accounts.account_begin_date
+            ,tbl_chart_accounts.account_end_date
+            ,tbl_chart_accounts.control
+            ,tbl_chart_accounts.is_posting_desc_required
+            ,tbl_chart_accounts.stat_count_type
+            ,tbl_chart_accounts.is_restricted_access
+            ,tbl_chart_accounts.sale_chain_fk
+            ,tbl_chart_accounts.department_fk
+            ,tbl_chart_accounts.franchise_fk
+            ,tbl_chart_accounts.created_by
+            ,tbl_chart_accounts.created_at
+            ,tbl_chart_accounts.updated_by
+            ,tbl_chart_accounts.updated_at
+            FROM tbl_chart_accounts;
+        </createView>
+    </changeSet>
+    <changeSet author="manchikr" id="1626136952029-134">
+        <createView fullDefinition="false" viewName="vw_account_recivables">
+            SELECT
+            tbl_account_recivables.tenant_fk
+            ,tbl_account_recivables.account_recivables_id
+            ,tbl_account_recivables.invoice_date
+            ,tbl_account_recivables.posting_body_fk
+            ,tbl_account_recivables.doc_type
+            ,tbl_account_recivables.customer_fk
+            ,tbl_account_recivables.is_on_hold
+            ,tbl_account_recivables.hold_comment
+            ,tbl_account_recivables.journal_fk
+            ,tbl_account_recivables.ar_schedule_fk
+            ,tbl_account_recivables.create_by
+            ,tbl_account_recivables.created_dt
+            ,tbl_account_recivables.updated_by
+            ,tbl_account_recivables.updated_at
+            FROM tbl_account_recivables;
+        </createView>
+    </changeSet>
+    <changeSet author="manchikr" id="1626136952029-136">
+        <createView fullDefinition="false" viewName="vw_gl_journal">
+            SELECT
+            tbl_gl_journal.tenant_fk
+            ,tbl_gl_journal.gl_journal_id
+            ,tbl_gl_journal.journalname
+            ,tbl_gl_journal.journaltype
+            ,tbl_gl_journal.jrnl_begin_date
+            ,tbl_gl_journal.jrnl_end_date
+            ,tbl_gl_journal.def_doc_type
+            ,tbl_gl_journal.is_desc_req
+            ,tbl_gl_journal.is_inter_co
+            ,tbl_gl_journal.post_tmplt_fk
+            ,tbl_gl_journal.recur_templt_fk
+            ,tbl_gl_journal.create_by
+            ,tbl_gl_journal.created_dt
+            ,tbl_gl_journal.updated_by
+            ,tbl_gl_journal.updated_at
+            FROM tbl_gl_journal;
+        </createView>
+    </changeSet>
+    <changeSet author="manchikr" id="1626136952029-138">
+        <createView fullDefinition="false" viewName="vw_posting_heading">
+            SELECT
+            tbl_posting_heading.tenant_fk
+            ,tbl_posting_heading.posting_heading_id
+            ,tbl_posting_heading.gl_journal_fk
+            ,tbl_posting_heading.reference_doc_ref_id
+            ,tbl_posting_heading.document_date
+            ,tbl_posting_heading.document_description
+            ,tbl_posting_heading.document_type
+            ,tbl_posting_heading.entry_date
+            ,tbl_posting_heading.post_date
+            ,tbl_posting_heading.is_transaction_ready
+            ,tbl_posting_heading.interface_code
+            ,tbl_posting_heading.is_doc_voided
+            ,tbl_posting_heading.logon_id
+            ,tbl_posting_heading.parts_invoice_fk
+            ,tbl_posting_heading.is_active
+            ,tbl_posting_heading.create_by
+            ,tbl_posting_heading.created_dt
+            ,tbl_posting_heading.updated_by
+            ,tbl_posting_heading.updated_at
+            FROM tbl_posting_heading;
+        </createView>
+    </changeSet>
+    <changeSet author="manchikr" id="1626136952029-140">
+        <createView fullDefinition="false" viewName="vw_act_checks">
+            SELECT
+            tbl_act_checks.tenant_fk
+            ,tbl_act_checks.act_checks_id
+            ,tbl_act_checks.check_number
+            ,tbl_act_checks.payee_id
+            ,tbl_act_checks.payee_name
+            ,tbl_act_checks.check_date
+            ,tbl_act_checks.check_amount
+            ,tbl_act_checks.check_type
+            ,tbl_act_checks.void_date
+            ,tbl_act_checks.act_payable_invoices_fk
+            ,tbl_act_checks.discount_amount
+            ,tbl_act_checks.comment
+            ,tbl_act_checks.vehicle_fk
+            ,tbl_act_checks.posting_heading_fk
+            ,tbl_act_checks.name_type
+            ,tbl_act_checks.payee_address
+            ,tbl_act_checks.create_by
+            ,tbl_act_checks.created_dt
+            ,tbl_act_checks.updated_by
+            ,tbl_act_checks.updated_at
+            FROM tbl_act_checks;
+        </createView>
+    </changeSet>
+    <changeSet author="manchikr" id="1626136952029-142">
+        <createView fullDefinition="false" viewName="vw_posting_body">
+            SELECT
+            tbl_posting_body.tenant_fk
+            ,tbl_posting_body.posting_body_id
+            ,tbl_posting_body.posting_heading_fk
+            ,tbl_posting_body.chart_accounts_fk
+            ,tbl_posting_body.default_amt
+            ,tbl_posting_body.control
+            ,tbl_posting_body.stat_counts
+            ,tbl_posting_body.post_desc
+            ,tbl_posting_body.is_month13_report
+            ,tbl_posting_body.expense_chain_fk
+            ,tbl_posting_body.ro_fk
+            ,tbl_posting_body.create_by
+            ,tbl_posting_body.created_dt
+            ,tbl_posting_body.updated_by
+            ,tbl_posting_body.updated_at
+            FROM tbl_posting_body;
+        </createView>
+    </changeSet>
+    <changeSet author="manchikr" id="1626136952029-144">
+        <createView fullDefinition="false" viewName="vw_expense_chain">
+            SELECT
+            tbl_expense_chain.tenant_fk
+            ,tbl_expense_chain.expense_chain_id
+            ,tbl_expense_chain.distribution_accounts
+            ,tbl_expense_chain.created_by
+            ,tbl_expense_chain.created_at
+            ,tbl_expense_chain.updated_by
+            ,tbl_expense_chain.updated_at
+            FROM tbl_expense_chain;
+        </createView>
+    </changeSet>
+    <changeSet author="manchikr" id="1626136952029-146">
+        <createView fullDefinition="false" viewName="vw_gl_posting_tmplt">
+            SELECT
+            tbl_gl_posting_tmplt.tenant_fk
+            ,tbl_gl_posting_tmplt.gl_posting_tmplt_id
+            ,tbl_gl_posting_tmplt.posting_tmplt_name
+            ,tbl_gl_posting_tmplt.action
+            ,tbl_gl_posting_tmplt.tmplt_desc
+            ,tbl_gl_posting_tmplt.document_description
+            ,tbl_gl_posting_tmplt.is_active
+            ,tbl_gl_posting_tmplt.validate_fields
+            ,tbl_gl_posting_tmplt.create_by
+            ,tbl_gl_posting_tmplt.created_dt
+            ,tbl_gl_posting_tmplt.updated_by
+            ,tbl_gl_posting_tmplt.updated_at
+            FROM tbl_gl_posting_tmplt;
+        </createView>
+    </changeSet>
+    <changeSet author="manchikr" id="1626136952029-148">
+        <createView fullDefinition="false" viewName="vw_gl_recur_posting_tmplt">
+            SELECT
+            tbl_gl_recur_posting_tmplt.tenant_fk
+            ,tbl_gl_recur_posting_tmplt.gl_recur_posting_tmplt_id
+            ,tbl_gl_recur_posting_tmplt.recur_posting_tmplt_name
+            ,tbl_gl_recur_posting_tmplt.document_description
+            ,tbl_gl_recur_posting_tmplt.templt_desc
+            ,tbl_gl_recur_posting_tmplt.action
+            ,tbl_gl_recur_posting_tmplt.gl_journal_fk
+            ,tbl_gl_recur_posting_tmplt.begin_date
+            ,tbl_gl_recur_posting_tmplt.end_date
+            ,tbl_gl_recur_posting_tmplt.rev_annv_day
+            ,tbl_gl_recur_posting_tmplt.validate_fields
+            ,tbl_gl_recur_posting_tmplt.is_post_updt
+            ,tbl_gl_recur_posting_tmplt.create_by
+            ,tbl_gl_recur_posting_tmplt.created_dt
+            ,tbl_gl_recur_posting_tmplt.updated_by
+            ,tbl_gl_recur_posting_tmplt.updated_at
+            FROM tbl_gl_recur_posting_tmplt;
+        </createView>
+    </changeSet>
+    <changeSet author="manchikr" id="1626136952029-150">
+        <createView fullDefinition="false" viewName="vw_po_line">
+            SELECT
+            tbl_po_line.tenant_fk
+            ,tbl_po_line.po_line_id
+            ,tbl_po_line.po_fk
+            ,tbl_po_line.po_line_comments
+            ,tbl_po_line.detail_desc
+            ,tbl_po_line.dtl_qty
+            ,tbl_po_line.received_qty
+            ,tbl_po_line.part_invoice_nbr
+            ,tbl_po_line.part_order_nbr
+            ,tbl_po_line.unit_price
+            ,tbl_po_line.extended_price_amt
+            ,tbl_po_line.stock_number
+            ,tbl_po_line.vin_number
+            ,tbl_po_line.repair_order_line_nbr
+            ,tbl_po_line.is_taxable
+            ,tbl_po_line.authorized_by_nm
+            ,tbl_po_line.received_dt
+            ,tbl_po_line.received_by_po_user_id
+            ,tbl_po_line.is_attached
+            ,tbl_po_line.is_completed
+            ,tbl_po_line.ship_info
+            ,tbl_po_line.create_by
+            ,tbl_po_line.created_dt
+            ,tbl_po_line.updated_by
+            ,tbl_po_line.updated_at
+            FROM tbl_po_line;
+        </createView>
+    </changeSet>
+    <changeSet author="manchikr" id="1626136952029-152">
+        <createView fullDefinition="false" viewName="vw_purchase_order">
+            SELECT
+            tbl_purchase_order.tenant_fk
+            ,tbl_purchase_order.purchase_order_id
+            ,tbl_purchase_order.po_order_id
+            ,tbl_purchase_order.po_order_type
+            ,tbl_purchase_order.order_status
+            ,tbl_purchase_order.order_total_amt
+            ,tbl_purchase_order.order_comment
+            ,tbl_purchase_order.total_freight_amt
+            ,tbl_purchase_order.tax_total_amt
+            ,tbl_purchase_order.customer_fk
+            ,tbl_purchase_order.ship_address_fk
+            ,tbl_purchase_order.vendor_fk
+            ,tbl_purchase_order.requestor_nm
+            ,tbl_purchase_order.ship_via_fk
+            ,tbl_purchase_order.tracking_nbr
+            ,tbl_purchase_order.close_dt
+            ,tbl_purchase_order.manual_po_order_nbr
+            ,tbl_purchase_order.is_manual_close
+            ,tbl_purchase_order.is_inactive
+            ,tbl_purchase_order.is_summary
+            ,tbl_purchase_order.void_dt
+            ,tbl_purchase_order.is_sep_pl
+            ,tbl_purchase_order.create_by
+            ,tbl_purchase_order.created_dt
+            ,tbl_purchase_order.updated_by
+            ,tbl_purchase_order.updated_at
+            FROM tbl_purchase_order;
+        </createView>
+    </changeSet>
+    <changeSet author="manchikr" id="1626136952029-154">
+        <createView fullDefinition="false" viewName="vw_reports_group">
+            SELECT
+            tbl_reports_group.tenant_fk
+            ,tbl_reports_group.reports_group_id
+            ,tbl_reports_group.report_type
+            ,tbl_reports_group.report_sub_group
+            ,tbl_reports_group.report_desc
+            ,tbl_reports_group.chart_accounts_fk
+            ,tbl_reports_group.created_by
+            ,tbl_reports_group.created_at
+            ,tbl_reports_group.updated_by
+            ,tbl_reports_group.updated_at
+            FROM tbl_reports_group;
+        </createView>
+    </changeSet>
+    <changeSet author="manchikr" id="1626136952029-156">
+        <createView fullDefinition="false" viewName="vw_rpt_schedule">
+            SELECT
+            tbl_rpt_schedule.tenant_fk
+            ,tbl_rpt_schedule.rpt_schedule_id
+            ,tbl_rpt_schedule.rpt_no
+            ,tbl_rpt_schedule.rpt_name
+            ,tbl_rpt_schedule.rpt_type
+            ,tbl_rpt_schedule.rpt_source_data_set
+            ,tbl_rpt_schedule.rpt_columns_clause
+            ,tbl_rpt_schedule.rpt_where_clause
+            ,tbl_rpt_schedule.sort_order_clause
+            ,tbl_rpt_schedule.is_page_brk_on_each_jrnl
+            ,tbl_rpt_schedule.is_required_to_close
+            ,tbl_rpt_schedule.column_heading_exceptions
+            ,tbl_rpt_schedule.column_width_exceptions
+            ,tbl_rpt_schedule.column_justification_exceptions
+            ,tbl_rpt_schedule.create_by
+            ,tbl_rpt_schedule.created_dt
+            ,tbl_rpt_schedule.updated_by
+            ,tbl_rpt_schedule.updated_at
+            FROM tbl_rpt_schedule;
+        </createView>
+    </changeSet>
+    <changeSet author="manchikr" id="1626136952029-158">
+        <createView fullDefinition="false" viewName="vw_gl_rcr_post_line_tmplt">
+            SELECT
+            tbl_gl_rcr_post_line_tmplt.tenant_fk
+            ,tbl_gl_rcr_post_line_tmplt.gl_recur_posting_tmplt_line_id
+            ,tbl_gl_rcr_post_line_tmplt.gl_recur_posting_tmplt_fk
+            ,tbl_gl_rcr_post_line_tmplt.chart_account_fk
+            ,tbl_gl_rcr_post_line_tmplt.amount
+            ,tbl_gl_rcr_post_line_tmplt.control_type
+            ,tbl_gl_rcr_post_line_tmplt.stat_cnt
+            ,tbl_gl_rcr_post_line_tmplt.post_line_desc
+            ,tbl_gl_rcr_post_line_tmplt.post_fml_flag
+            ,tbl_gl_rcr_post_line_tmplt.post_fml_pct
+            ,tbl_gl_rcr_post_line_tmplt.post_fml_cd
+            ,tbl_gl_rcr_post_line_tmplt.post_fml_acct
+            ,tbl_gl_rcr_post_line_tmplt.post_fml_bal_flag
+            ,tbl_gl_rcr_post_line_tmplt.create_by
+            ,tbl_gl_rcr_post_line_tmplt.created_dt
+            ,tbl_gl_rcr_post_line_tmplt.updated_by
+            ,tbl_gl_rcr_post_line_tmplt.updated_at
+            FROM tbl_gl_rcr_post_line_tmplt;
+        </createView>
+    </changeSet>
+    <changeSet author="manchikr" id="1626136952029-160">
+        <createView fullDefinition="false" viewName="vw_gl_posting_line_tmplt">
+            SELECT
+            tbl_gl_posting_line_tmplt.tenant_fk
+            ,tbl_gl_posting_line_tmplt.gl_posting_tmplt_line_id
+            ,tbl_gl_posting_line_tmplt.gl_posting_tmplt_fk
+            ,tbl_gl_posting_line_tmplt.chart_account_fk
+            ,tbl_gl_posting_line_tmplt.amount
+            ,tbl_gl_posting_line_tmplt.control_type
+            ,tbl_gl_posting_line_tmplt.stat_cnt
+            ,tbl_gl_posting_line_tmplt.post_line_desc
+            ,tbl_gl_posting_line_tmplt.create_by
+            ,tbl_gl_posting_line_tmplt.created_dt
+            ,tbl_gl_posting_line_tmplt.updated_by
+            ,tbl_gl_posting_line_tmplt.updated_at
+            FROM tbl_gl_posting_line_tmplt;
+        </createView>
+    </changeSet>
+</databaseChangeLog>
